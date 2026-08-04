@@ -38,10 +38,37 @@ rs.mock("@langchain/langgraph-sdk/react", () => ({
   },
 }));
 
-test("keeps early streamed steps behind a local user message after finish", async () => {
-  const { useThreadStream } = await import("@/core/threads/hooks");
+test("keeps paged history ahead of the local turn after finish", async () => {
+  const { threadHistoryQueryKey, useThreadStream } = await import(
+    "@/core/threads/hooks",
+  );
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
+  });
+  const historicalHuman = {
+    id: "historical-request",
+    run_id: "run-1",
+    type: "human",
+    content: "Create the project outline",
+  } as Message;
+  const historicalAssistant = {
+    id: "historical-response",
+    run_id: "run-1",
+    type: "ai",
+    content: "Here is the outline",
+  } as Message;
+  queryClient.setQueryData(threadHistoryQueryKey("thread-1"), {
+    pages: [
+      {
+        data: [
+          { content: historicalHuman, run_id: "run-1", seq: 1 },
+          { content: historicalAssistant, run_id: "run-1", seq: 2 },
+        ],
+        has_more: false,
+        next_before_seq: null,
+      },
+    ],
+    pageParams: [null],
   });
   const wrapper = ({ children }: { children: ReactNode }) =>
     createElement(
@@ -63,11 +90,15 @@ test("keeps early streamed steps behind a local user message after finish", asyn
     () =>
       useThreadStream({
         context: DEFAULT_LOCAL_SETTINGS.context,
-        isMock: true,
         threadId: "thread-1",
       }),
     { wrapper },
   );
+
+  expect(result.current.thread.messages).toEqual([
+    historicalHuman,
+    historicalAssistant,
+  ]);
 
   await act(async () => {
     await result.current.sendMessage("thread-1", {
@@ -91,6 +122,8 @@ test("keeps early streamed steps behind a local user message after finish", asyn
   rerender();
 
   expect(result.current.thread.messages).toEqual([
+    historicalHuman,
+    historicalAssistant,
     injectedHuman,
     earlyAssistantStep,
   ]);
@@ -104,6 +137,8 @@ test("keeps early streamed steps behind a local user message after finish", asyn
   });
 
   expect(result.current.thread.messages).toEqual([
+    historicalHuman,
+    historicalAssistant,
     injectedHuman,
     earlyAssistantStep,
   ]);

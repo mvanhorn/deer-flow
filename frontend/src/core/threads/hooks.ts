@@ -645,6 +645,16 @@ export function restoreLocalTurnMessageOrder(
   ];
 }
 
+function buildLocalTurnOrderBaselineIdentities(
+  committedVisibleIdentities: readonly string[],
+  liveMessageIdentities: ReadonlySet<string>,
+): Set<string> {
+  // The committed render ledger includes canonical paged history that may be
+  // absent from the SDK frame. Keep the live identities too in case submit
+  // happens before the frame reaches the next committed render.
+  return new Set([...committedVisibleIdentities, ...liveMessageIdentities]);
+}
+
 /**
  * Keep a run-scoped ledger of every visible message that reached a committed
  * UI frame. Live checkpoint windows can roll forward between two
@@ -1955,9 +1965,14 @@ export function useThreadStream({
           .map(messageIdentity)
           .filter((id): id is string => Boolean(id)),
       );
-      localTurnOrderBaselineIdentitiesRef.current = new Set(
-        pendingUsageBaselineMessageIdsRef.current,
-      );
+      const renderedMessageSnapshot = renderedMessageSnapshotRef.current;
+      localTurnOrderBaselineIdentitiesRef.current =
+        buildLocalTurnOrderBaselineIdentities(
+          renderedMessageSnapshot.threadId === threadId
+            ? renderedMessageSnapshot.order
+            : EMPTY_MESSAGE_IDENTITIES,
+          pendingUsageBaselineMessageIdsRef.current,
+        );
 
       // Build optimistic files list with uploading status
       const optimisticFiles: FileInMessage[] = (message.files ?? []).map(
@@ -2162,9 +2177,14 @@ export function useThreadStream({
           .map(messageIdentity)
           .filter((id): id is string => Boolean(id)),
       );
-      localTurnOrderBaselineIdentitiesRef.current = new Set(
-        pendingUsageBaselineMessageIdsRef.current,
-      );
+      const renderedMessageSnapshot = renderedMessageSnapshotRef.current;
+      localTurnOrderBaselineIdentitiesRef.current =
+        buildLocalTurnOrderBaselineIdentities(
+          renderedMessageSnapshot.threadId === threadId
+            ? renderedMessageSnapshot.order
+            : EMPTY_MESSAGE_IDENTITIES,
+          pendingUsageBaselineMessageIdsRef.current,
+        );
       setLiveMessagesThreadId(threadId);
       listeners.current.onSend?.(threadId);
       let preparedSupersededRunId: string | null = null;
